@@ -5,6 +5,8 @@ PROJECT_ID="telkomsel-retail-intelligence"
 REGION="asia-southeast2"
 BACKEND_SERVICE="retina-backend"
 FRONTEND_SERVICE="retina-frontend"
+ARTIFACT_REGISTRY="asia-southeast2-docker.pkg.dev"
+REPOSITORY="retina-app"
 
 # Set project
 gcloud config set project $PROJECT_ID
@@ -12,12 +14,12 @@ gcloud config set project $PROJECT_ID
 echo "Building and deploying backend..."
 cd backend
 
-# Build and push backend image
-gcloud builds submit --tag gcr.io/$PROJECT_ID/$BACKEND_SERVICE
+# Build and push backend image to Artifact Registry
+gcloud builds submit --tag ${ARTIFACT_REGISTRY}/${PROJECT_ID}/${REPOSITORY}/${BACKEND_SERVICE}
 
 # Deploy backend to Cloud Run
 gcloud run deploy $BACKEND_SERVICE \
-  --image gcr.io/$PROJECT_ID/$BACKEND_SERVICE \
+  --image ${ARTIFACT_REGISTRY}/${PROJECT_ID}/${REPOSITORY}/${BACKEND_SERVICE} \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
@@ -40,12 +42,12 @@ cd frontend
 # Update frontend .env with backend URL
 echo "VITE_API_URL=${BACKEND_URL}/api" > .env.production
 
-# Build and push frontend image
-gcloud builds submit --tag gcr.io/$PROJECT_ID/$FRONTEND_SERVICE
+# Build and push frontend image to Artifact Registry
+gcloud builds submit --tag ${ARTIFACT_REGISTRY}/${PROJECT_ID}/${REPOSITORY}/${FRONTEND_SERVICE}
 
 # Deploy frontend to Cloud Run
 gcloud run deploy $FRONTEND_SERVICE \
-  --image gcr.io/$PROJECT_ID/$FRONTEND_SERVICE \
+  --image ${ARTIFACT_REGISTRY}/${PROJECT_ID}/${REPOSITORY}/${FRONTEND_SERVICE} \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
