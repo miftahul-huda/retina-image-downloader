@@ -25,6 +25,8 @@ function App() {
   const [downloadJobId, setDownloadJobId] = useState(null);
   const [downloadProgress, setDownloadProgress] = useState(null);
   const [user, setUser] = useState(null);
+  const [showExistingJobModal, setShowExistingJobModal] = useState(false);
+  const [isClosingExistingModal, setIsClosingExistingModal] = useState(false);
 
   const uniqueAreas = [...new Set(masterData.map(d => d.area))].filter(Boolean);
   const uniqueRegions = [...new Set(masterData.filter(d => !filters.area || d.area === filters.area).map(d => d.region))].filter(Boolean);
@@ -200,7 +202,8 @@ function App() {
             queuePosition: err.response.data.queuePosition
           });
         }
-        alert(err.response.data.error || 'You already have an active download request.');
+        // Show custom modal instead of alert
+        setShowExistingJobModal(true);
       } else {
         alert('Download failed. Please try again.');
         setDownloading(false);
@@ -214,10 +217,19 @@ function App() {
       setDownloading(false);
       setDownloadJobId(null);
       setDownloadProgress(null);
+      closeExistingJobModal();
     } catch (err) {
       console.error('Error cancelling download:', err);
       alert('Failed to cancel download.');
     }
+  };
+
+  const closeExistingJobModal = () => {
+    setIsClosingExistingModal(true);
+    setTimeout(() => {
+      setShowExistingJobModal(false);
+      setIsClosingExistingModal(false);
+    }, 200);
   };
 
   const fetchDownloadStatus = async () => {
@@ -498,6 +510,20 @@ function App() {
               <a href={selectedImage.thumbnailUrl} download target="_blank" rel="noreferrer" className="btn btn-primary" style={{ marginTop: '1rem', textDecoration: 'none' }}>
                 <FaDownload /> Download Image
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExistingJobModal && (
+        <div className={`modal-overlay ${isClosingExistingModal ? 'closing' : ''}`} onClick={closeExistingJobModal}>
+          <div className="modal-content modal-confirm" onClick={e => e.stopPropagation()}>
+            <button className="close-btn" onClick={closeExistingJobModal}><FaTimes /></button>
+            <h3>Download Already in Progress</h3>
+            <p>You already have an active or queued download request. Please wait for it to complete or cancel it before starting a new one.</p>
+            <div className="modal-actions">
+              <button className="btn btn-outline" onClick={closeExistingJobModal}>Close</button>
+              <button className="btn btn-primary btn-danger" onClick={handleCancelDownload}>Cancel Download</button>
             </div>
           </div>
         </div>
