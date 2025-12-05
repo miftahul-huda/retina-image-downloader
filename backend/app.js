@@ -53,17 +53,15 @@ app.use(passport.session());
 app.use('/api', apiRoutes);
 app.use('/api/auth', authRoutes);
 
-// Serve static files from the frontend build directory
-const distPath = path.join(__dirname, 'dist');
-if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
-
-    // Serve index.html for any other requests (SPA routing)
-    // Must be after API routes
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
-    });
-}
+// Serve static files from the frontend build directory (only for unified deployment)
+// Commented out for separate services deployment
+// const distPath = path.join(__dirname, 'dist');
+// if (fs.existsSync(distPath)) {
+//     app.use(express.static(distPath));
+//     app.get('*', (req, res) => {
+//         res.sendFile(path.join(distPath, 'index.html'));
+//     });
+// }
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
