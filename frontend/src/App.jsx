@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GoogleLogin } from '@react-oauth/google';
+import { useGoogleLogin } from '@react-oauth/google';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from 'date-fns';
@@ -106,27 +106,31 @@ function App() {
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse) => {
-    try {
-      // Send Google credential to backend
-      const res = await api.post('/auth/google', {
-        credential: credentialResponse.credential
-      });
+  // Google Login with Drive scope
+  const googleLogin = useGoogleLogin({
+    flow: 'auth-code',
+    scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+    onSuccess: async (codeResponse) => {
+      try {
+        // Send authorization code to backend
+        const res = await api.post('/auth/google', {
+          code: codeResponse.code
+        });
 
-      // Store token and user in localStorage
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
-      setUser(res.data.user);
-    } catch (err) {
-      console.error('Login failed:', err);
-      alert('Login failed. Please try again.');
+        // Store token and user in localStorage
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+        setUser(res.data.user);
+      } catch (err) {
+        console.error('Login failed:', err);
+        alert('Login failed. Please try again.');
+      }
+    },
+    onError: (error) => {
+      console.error('Google Login Failed:', error);
+      alert('Google Login Failed');
     }
-  };
-
-  const handleGoogleError = () => {
-    console.error('Google Login Failed');
-    alert('Google Login Failed');
-  };
+  });
 
   const fetchMasterData = async () => {
     try {
@@ -298,15 +302,9 @@ function App() {
 
             </>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                theme="filled_blue"
-                size="large"
-                text="signin_with"
-              />
-            </div>
+            <button onClick={googleLogin} className="btn btn-primary">
+              <FaGoogle /> Login with Google
+            </button>
           )}
         </div>
       </header>

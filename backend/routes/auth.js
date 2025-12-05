@@ -6,14 +6,28 @@ const { GoogleUser } = require('../models');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Verify Google token and return JWT
+// Exchange authorization code for tokens
 router.post('/google', async (req, res) => {
     try {
-        const { credential } = req.body;
+        const { code } = req.body;
 
-        // Verify Google token
-        const ticket = await client.verifyIdToken({
-            idToken: credential,
+        if (!code) {
+            return res.status(400).json({ error: 'Authorization code required' });
+        }
+
+        // Exchange code for tokens
+        const oauth2Client = new OAuth2Client(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            'postmessage' // For authorization code flow
+        );
+
+        const { tokens } = await oauth2Client.getToken(code);
+        oauth2Client.setCredentials(tokens);
+
+        // Get user info
+        const ticket = await oauth2Client.verifyIdToken({
+            idToken: tokens.id_token,
             audience: process.env.GOOGLE_CLIENT_ID,
         });
 
@@ -27,15 +41,19 @@ router.post('/google', async (req, res) => {
             user = await GoogleUser.create({
                 googleId,
                 email,
-                displayName: name,
-                photo: picture
+                name: name,
+                photo: picture,
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token
             });
         } else {
-            // Update user info
+            // Update user info and tokens
             await user.update({
                 email,
-                displayName: name,
-                photo: picture
+                name: name,
+                photo: picture,
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token || user.refreshToken // Keep old refresh token if new one not provided
             });
         }
 
@@ -45,7 +63,7 @@ router.post('/google', async (req, res) => {
                 id: user.id,
                 googleId: user.googleId,
                 email: user.email,
-                displayName: user.displayName,
+                displayName: user.name,
                 photo: user.photo
             },
             process.env.JWT_SECRET,
@@ -57,13 +75,13 @@ router.post('/google', async (req, res) => {
             user: {
                 id: user.id,
                 email: user.email,
-                displayName: user.displayName,
+                displayName: user.name,
                 photo: user.photo
             }
         });
     } catch (error) {
         console.error('Google auth error:', error);
-        res.status(401).json({ error: 'Invalid Google token' });
+        res.status(401).json({ error: 'Invalid authorization code' });
     }
 });
 
