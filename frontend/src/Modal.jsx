@@ -7,22 +7,33 @@ function Modal({ isOpen, onClose, title, message, type = 'info' }) {
     const getIcon = () => {
         switch (type) {
             case 'error':
-                return <FaExclamationCircle style={{ color: '#e74c3c', fontSize: '3rem' }} />;
+                return <FaExclamationCircle />;
             case 'success':
-                return <FaCheckCircle style={{ color: '#27ae60', fontSize: '3rem' }} />;
+                return <FaCheckCircle />;
             default:
-                return <FaInfoCircle style={{ color: '#3498db', fontSize: '3rem' }} />;
+                return <FaInfoCircle />;
+        }
+    };
+
+    const getIconColor = () => {
+        switch (type) {
+            case 'error':
+                return '#e74c3c';
+            case 'success':
+                return '#27ae60';
+            default:
+                return '#3498db';
         }
     };
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content modal-alert" onClick={(e) => e.stopPropagation()}>
                 <button className="modal-close" onClick={onClose}>
                     <FaTimes />
                 </button>
 
-                <div className="modal-icon">
+                <div className="modal-icon" style={{ color: getIconColor() }}>
                     {getIcon()}
                 </div>
 
