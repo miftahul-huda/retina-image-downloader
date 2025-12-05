@@ -13,9 +13,26 @@ router.get(
     '/google/callback',
     passport.authenticate('google'),
     (req, res) => {
-        // Redirect to frontend URL (supports dev and production)
+        // Send HTML page that redirects via JavaScript
+        // This ensures cookies are set before redirect
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-        res.redirect(`${frontendUrl}/?login_success=true`);
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Login Successful</title>
+            </head>
+            <body>
+                <script>
+                    // Wait a moment for cookies to be set, then redirect
+                    setTimeout(function() {
+                        window.location.href = '${frontendUrl}/?login_success=true';
+                    }, 100);
+                </script>
+                <p>Login successful! Redirecting...</p>
+            </body>
+            </html>
+        `);
     }
 );
 
