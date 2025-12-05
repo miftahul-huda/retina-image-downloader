@@ -385,7 +385,12 @@ async function processDownload(jobId, query, user) {
 exports.startDownloadJob = async (req, res) => {
     try {
         const userId = req.user.id;
-        const user = req.user;
+
+        // Fetch full user with tokens from database
+        const user = await GoogleUser.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
 
         // Check if user already has an active or queued job
         const existingUserJob = await DownloadJob.findOne({
