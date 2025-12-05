@@ -1,22 +1,19 @@
 const express = require('express');
 const cors = require('cors');
-const session = require('express-session');
-const passport = require('passport');
 const db = require('./models');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-require('./config/passport'); // Load passport configuration
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS configuration
+// CORS configuration - simplified for JWT
 const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:5173',
-    'http://localhost:3000'  // Allow backend to serve frontend
+    'http://localhost:3000'
 ];
 
 app.use(cors({
@@ -28,31 +25,9 @@ app.use(cors({
         } else {
             callback(new Error('Not allowed by CORS'));
         }
-    },
-    credentials: true
+    }
 }));
 app.use(express.json());
-
-// Session configuration from environment variables
-const cookieSecure = process.env.COOKIE_SECURE === 'true';
-const cookieSameSite = process.env.COOKIE_SAME_SITE || 'lax';
-
-app.use(
-    session({
-        secret: process.env.COOKIE_KEY,
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-            secure: cookieSecure,
-            sameSite: cookieSameSite,
-            httpOnly: true
-        }
-    })
-);
-
-app.use(passport.initialize());
-app.use(passport.session());
 
 app.use('/api', apiRoutes);
 app.use('/api/auth', authRoutes);
