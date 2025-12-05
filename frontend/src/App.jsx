@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
@@ -7,9 +8,11 @@ import { FaDownload, FaSearch, FaTimes, FaCloudDownloadAlt, FaGoogle, FaCalendar
 import api from './api';
 import AdminPanel from './AdminPanel';
 import Modal from './Modal';
+import PrivacyPolicy from './PrivacyPolicy';
+import TermsOfService from './TermsOfService';
 import './index.css';
 
-function App() {
+function MainApp() {
   const [filters, setFilters] = useState({
     startDate: new Date(new Date().setDate(new Date().getDate() - 7)),
     endDate: new Date(),
@@ -567,6 +570,15 @@ function App() {
         )}
       </main>
 
+      <footer style={{ textAlign: 'center', padding: '2rem', color: '#666', borderTop: '1px solid #eee', marginTop: 'auto' }}>
+        <p>&copy; {new Date().getFullYear()} Retina Downloader. All rights reserved.</p>
+        <div style={{ marginTop: '0.5rem' }}>
+          <Link to="/privacy-policy" style={{ color: '#666', textDecoration: 'none', margin: '0 0.5rem' }}>Privacy Policy</Link>
+          |
+          <Link to="/terms-of-service" style={{ color: '#666', textDecoration: 'none', margin: '0 0.5rem' }}>Terms of Service</Link>
+        </div>
+      </footer>
+
       {selectedImage && (
         <div className="modal-overlay" onClick={() => setSelectedImage(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -608,6 +620,18 @@ function App() {
         type={modal.type}
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<MainApp />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms-of-service" element={<TermsOfService />} />
+      </Routes>
+    </Router>
   );
 }
 
