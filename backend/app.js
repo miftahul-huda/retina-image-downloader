@@ -51,8 +51,8 @@ app.use(passport.session());
 app.use('/api', apiRoutes);
 app.use('/api/auth', authRoutes);
 
-// Serve static files from the frontend build directory (production only)
-const distPath = path.join(__dirname, '../frontend/dist');
+// Serve static files from the frontend build directory
+const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
 
