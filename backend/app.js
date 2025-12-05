@@ -59,7 +59,8 @@ if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
 
     // Serve index.html for any other requests (SPA routing)
-    app.get('/*', (req, res) => {
+    // Must be after API routes
+    app.get('*', (req, res) => {
         res.sendFile(path.join(distPath, 'index.html'));
     });
 }

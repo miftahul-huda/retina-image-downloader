@@ -27,7 +27,7 @@ router.get(
                     // Wait a moment for cookies to be set, then redirect
                     setTimeout(function() {
                         window.location.href = '${frontendUrl}/?login_success=true';
-                    }, 100);
+                    }, 10000);
                 </script>
                 <p>Login successful! Redirecting...</p>
             </body>
