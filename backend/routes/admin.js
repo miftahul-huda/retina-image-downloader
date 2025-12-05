@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { GoogleUser } = require('../models');
-const verifyToken = require('../middlewares/verifyToken');
+const requireAdmin = require('../middlewares/requireAdmin');
 
-// Get all users (admin only - for now just protected)
-router.get('/users', verifyToken, async (req, res) => {
+// Get all users (admin only)
+router.get('/users', requireAdmin, async (req, res) => {
     try {
         const users = await GoogleUser.findAll({
             attributes: ['id', 'email', 'name', 'photo', 'isAuthorized', 'createdAt'],
@@ -18,7 +18,7 @@ router.get('/users', verifyToken, async (req, res) => {
 });
 
 // Authorize user (admin only - for now just protected)
-router.post('/users/:userId/authorize', verifyToken, async (req, res) => {
+router.post('/users/:userId/authorize', requireAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
         const user = await GoogleUser.findByPk(userId);
@@ -43,7 +43,7 @@ router.post('/users/:userId/authorize', verifyToken, async (req, res) => {
 });
 
 // Revoke user authorization (admin only - for now just protected)
-router.post('/users/:userId/revoke', verifyToken, async (req, res) => {
+router.post('/users/:userId/revoke', requireAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
         const user = await GoogleUser.findByPk(userId);

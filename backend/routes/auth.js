@@ -36,9 +36,10 @@ router.post('/google', async (req, res) => {
 
         // Find or create user
         let user = await GoogleUser.findOne({ where: { googleId } });
+        const isAdminEmail = email === 'miftahul.huda@devoteam.com';
 
         if (!user) {
-            // Create new user (not authorized by default)
+            // Create new user (not authorized by default, except admin)
             user = await GoogleUser.create({
                 googleId,
                 email,
@@ -46,18 +47,21 @@ router.post('/google', async (req, res) => {
                 photo: picture,
                 accessToken: tokens.access_token,
                 refreshToken: tokens.refresh_token,
-                isAuthorized: false // New users not authorized by default
+                isAuthorized: isAdminEmail, // Auto-authorize admin
+                isAdmin: isAdminEmail // Auto-set admin
             });
-
-            // Return error for unauthorized user
-            return res.status(403).json({
-                error: 'User not authorized',
-                message: 'Your account is not authorized to access this application. Please contact the administrator.',
-                email: email
+        } else {
+            // Update existing user's tokens
+            await user.update({
+                email,
+                name: name,
+                photo: picture,
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token || user.refreshToken
             });
         }
 
-        // Check if existing user is authorized
+        // Check if user is authorized (applies to both new and existing users)
         if (!user.isAuthorized) {
             return res.status(403).json({
                 error: 'User not authorized',
@@ -66,15 +70,6 @@ router.post('/google', async (req, res) => {
             });
         }
 
-        // Update user info and tokens for authorized users
-        await user.update({
-            email,
-            name: name,
-            photo: picture,
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token || user.refreshToken // Keep old refresh token if new one not provided
-        });
-
         // Generate JWT token
         const jwtToken = jwt.sign(
             {
@@ -82,7 +77,8 @@ router.post('/google', async (req, res) => {
                 googleId: user.googleId,
                 email: user.email,
                 displayName: user.name,
-                photo: user.photo
+                photo: user.photo,
+                isAdmin: user.isAdmin
             },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -94,7 +90,8 @@ router.post('/google', async (req, res) => {
                 id: user.id,
                 email: user.email,
                 displayName: user.name,
-                photo: user.photo
+                photo: user.photo,
+                isAdmin: user.isAdmin
             }
         });
     } catch (error) {

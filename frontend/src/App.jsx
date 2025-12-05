@@ -3,8 +3,9 @@ import { useGoogleLogin } from '@react-oauth/google';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from 'date-fns';
-import { FaDownload, FaSearch, FaTimes, FaCloudDownloadAlt, FaGoogle, FaCalendarAlt, FaMapMarkerAlt, FaImage, FaUser, FaBuilding, FaSignOutAlt } from 'react-icons/fa';
+import { FaDownload, FaSearch, FaTimes, FaCloudDownloadAlt, FaGoogle, FaCalendarAlt, FaMapMarkerAlt, FaImage, FaUser, FaBuilding, FaSignOutAlt, FaShieldAlt } from 'react-icons/fa';
 import api from './api';
+import AdminPanel from './AdminPanel';
 import './index.css';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [showExistingJobModal, setShowExistingJobModal] = useState(false);
   const [isClosingExistingModal, setIsClosingExistingModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('downloads'); // 'downloads' or 'admin'
 
   const uniqueAreas = [...new Set(masterData.map(d => d.area))].filter(Boolean);
   const uniqueRegions = [...new Set(masterData.filter(d => !filters.area || d.area === filters.area).map(d => d.region))].filter(Boolean);
@@ -287,6 +289,38 @@ function App() {
         <a href="/" className="logo">
           <FaImage /> Retina Downloader
         </a>
+        {user && user.isAdmin && (
+          <div style={{ display: 'flex', gap: '1rem', marginLeft: 'auto', marginRight: '2rem' }}>
+            <button
+              onClick={() => setActiveTab('downloads')}
+              style={{
+                background: activeTab === 'downloads' ? 'rgba(255,255,255,0.2)' : 'transparent',
+                border: 'none',
+                color: 'white',
+                padding: '0.5rem 1rem',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontWeight: activeTab === 'downloads' ? '600' : '400'
+              }}
+            >
+              <FaDownload /> Downloads
+            </button>
+            <button
+              onClick={() => setActiveTab('admin')}
+              style={{
+                background: activeTab === 'admin' ? 'rgba(255,255,255,0.2)' : 'transparent',
+                border: 'none',
+                color: 'white',
+                padding: '0.5rem 1rem',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontWeight: activeTab === 'admin' ? '600' : '400'
+              }}
+            >
+              <FaShieldAlt /> Admin
+            </button>
+          </div>
+        )}
         <div className="user-profile">
           {user ? (
             <>
@@ -296,7 +330,7 @@ function App() {
                 ) : (
                   <FaUser style={{ color: "white", fontSize: "24px" }} />
                 )}
-                <div style={{ color: "white" }}>{user.name}</div>
+                <div style={{ color: "white" }}>{user.displayName}</div>
                 <button onClick={handleLogout} className="btn btn-outline"><FaSignOutAlt /> Logout</button>
               </div>
 
@@ -314,6 +348,8 @@ function App() {
           <div style={{ textAlign: 'center', padding: '4rem' }}>
             <h2>Please login to use the application.</h2>
           </div>
+        ) : activeTab === 'admin' && user.isAdmin ? (
+          <AdminPanel />
         ) : (
           <>
             <div className="filters-bar">
