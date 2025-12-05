@@ -27,8 +27,7 @@ gcloud run deploy $BACKEND_SERVICE \
   --memory 1Gi \
   --cpu 1 \
   --timeout 300 \
-  --max-instances 10 \
-  --set-env-vars "PORT=8080"
+  --max-instances 10
 
 # Get backend URL
 BACKEND_URL=$(gcloud run services describe $BACKEND_SERVICE --region $REGION --format 'value(status.url)')

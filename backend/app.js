@@ -38,7 +38,12 @@ app.use(
         secret: process.env.COOKIE_KEY,
         resave: false,
         saveUninitialized: false,
-        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        cookie: {
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+            secure: true, // Required for sameSite: 'none'
+            sameSite: 'none', // Allow cross-domain cookies
+            httpOnly: true
+        }
     })
 );
 
