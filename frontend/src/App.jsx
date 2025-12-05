@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from 'date-fns';
@@ -34,17 +35,11 @@ function App() {
 
   useEffect(() => {
     fetchMasterData();
-    fetchCurrentUser();
-  }, []);
-
-  // Re-fetch user after OAuth redirect
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('login_success') === 'true') {
-      // Remove the parameter from URL
-      window.history.replaceState({}, '', window.location.pathname);
-      // Re-fetch current user to get session
-      fetchCurrentUser();
+    // Check if user is logged in (has token)
+    const token = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    if (token && savedUser) {
+      setUser(JSON.parse(savedUser));
     }
   }, []);
 
@@ -111,13 +106,26 @@ function App() {
     }
   };
 
-  const fetchCurrentUser = async () => {
+  const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      const res = await api.get('/auth/current_user');
-      setUser(res.data);
+      // Send Google credential to backend
+      const res = await api.post('/auth/google', {
+        credential: credentialResponse.credential
+      });
+
+      // Store token and user in localStorage
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      setUser(res.data.user);
     } catch (err) {
-      console.error(err);
+      console.error('Login failed:', err);
+      alert('Login failed. Please try again.');
     }
+  };
+
+  const handleGoogleError = () => {
+    console.error('Google Login Failed');
+    alert('Google Login Failed');
   };
 
   const fetchMasterData = async () => {
@@ -256,18 +264,17 @@ function App() {
     }
   };
 
-  const handleLogin = () => {
-    // Use the API base URL for login (handles dev vs production)
-    const apiBase = import.meta.env.VITE_API_URL ||
-      (window.location.port === '5173' ? 'http://localhost:3000/api' : `${window.location.origin}/api`);
-    window.location.href = `${apiBase}/auth/google`;
-  };
+  // handleLogin is now handled by GoogleLogin component
 
   const handleLogout = () => {
-    // Use window.location.href to handle the redirect properly
-    const apiBase = import.meta.env.VITE_API_URL ||
-      (window.location.port === '5173' ? 'http://localhost:3000/api' : `${window.location.origin}/api`);
-    window.location.href = `${apiBase}/auth/logout`;
+    // Clear localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setUploads([]);
+    setDownloading(false);
+    setDownloadJobId(null);
+    setDownloadProgress(null);
   };
 
   return (
@@ -291,7 +298,15 @@ function App() {
 
             </>
           ) : (
-            <button onClick={handleLogin} className="btn btn-primary"><FaGoogle /> Login with Google</button>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                theme="filled_blue"
+                size="large"
+                text="signin_with"
+              />
+            </div>
           )}
         </div>
       </header>
