@@ -41,6 +41,10 @@ cd frontend
 # Update frontend .env with backend URL
 echo "VITE_API_URL=${BACKEND_URL}/api" > .env.production
 
+# Extract GOOGLE_CLIENT_ID from backend .env and add to frontend .env
+GOOGLE_CLIENT_ID=$(grep GOOGLE_CLIENT_ID ../backend/.env | cut -d '=' -f2)
+echo "VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env.production
+
 # Build and push frontend image to Artifact Registry
 gcloud builds submit --tag ${ARTIFACT_REGISTRY}/${PROJECT_ID}/${REPOSITORY}/${FRONTEND_SERVICE}
 
