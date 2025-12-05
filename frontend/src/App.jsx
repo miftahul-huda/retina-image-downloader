@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { FaDownload, FaSearch, FaTimes, FaCloudDownloadAlt, FaGoogle, FaCalendarAlt, FaMapMarkerAlt, FaImage, FaUser, FaBuilding, FaSignOutAlt, FaShieldAlt } from 'react-icons/fa';
 import api from './api';
 import AdminPanel from './AdminPanel';
+import Modal from './Modal';
 import './index.css';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
   const [showExistingJobModal, setShowExistingJobModal] = useState(false);
   const [isClosingExistingModal, setIsClosingExistingModal] = useState(false);
   const [activeTab, setActiveTab] = useState('downloads'); // 'downloads' or 'admin'
+  const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
 
   const uniqueAreas = [...new Set(masterData.map(d => d.area))].filter(Boolean);
   const uniqueRegions = [...new Set(masterData.filter(d => !filters.area || d.area === filters.area).map(d => d.region))].filter(Boolean);
@@ -126,14 +128,28 @@ function App() {
       } catch (err) {
         console.error('Login failed:', err);
 
-        // Show specific error message from backend
+        // Show specific error message from backend in custom modal
         const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
-        alert(errorMessage);
+        const errorTitle = err.response?.data?.error === 'User not registered'
+          ? 'Account Not Registered'
+          : 'Login Failed';
+
+        setModal({
+          isOpen: true,
+          title: errorTitle,
+          message: errorMessage,
+          type: 'error'
+        });
       }
     },
     onError: (error) => {
       console.error('Google Login Failed:', error);
-      alert('Google Login Failed');
+      setModal({
+        isOpen: true,
+        title: 'Google Login Failed',
+        message: 'There was an issue with Google login. Please try again.',
+        type: 'error'
+      });
     }
   });
 
@@ -580,6 +596,15 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Custom Modal */}
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={() => setModal({ ...modal, isOpen: false })}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+      />
     </div>
   );
 }
