@@ -33,10 +33,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Session configuration
-// For localhost: secure: false (HTTP), sameSite: 'lax'
-// For production: secure: true (HTTPS), sameSite: 'none' (cross-domain)
-const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_URL?.includes('https://');
+// Session configuration from environment variables
+const cookieSecure = process.env.COOKIE_SECURE === 'true';
+const cookieSameSite = process.env.COOKIE_SAME_SITE || 'lax';
 
 app.use(
     session({
@@ -45,8 +44,8 @@ app.use(
         saveUninitialized: false,
         cookie: {
             maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-            secure: isProduction, // true for HTTPS (production), false for HTTP (localhost)
-            sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-domain (production), 'lax' for same-site (localhost)
+            secure: cookieSecure,
+            sameSite: cookieSameSite,
             httpOnly: true
         }
     })
