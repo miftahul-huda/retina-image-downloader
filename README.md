@@ -147,7 +147,10 @@ Create `.env`:
 
 ```env
 VITE_API_URL=http://localhost:3000/api
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
+
+> **Note:** `VITE_GOOGLE_CLIENT_ID` is required for the frontend to initialize the Google OAuth flow. It must match the Client ID configured in your Google Cloud Console and the one used in the backend `.env`.
 
 ## 🏃 Running the Application
 
