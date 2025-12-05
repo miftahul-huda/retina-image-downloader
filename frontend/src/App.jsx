@@ -114,6 +114,8 @@ function App() {
   const googleLogin = useGoogleLogin({
     flow: 'auth-code',
     scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+    prompt: 'select_account', // Only ask to select account, do not force consent
+    include_granted_scopes: true, // Use existing granted scopes
     onSuccess: async (codeResponse) => {
       try {
         // Send authorization code to backend
