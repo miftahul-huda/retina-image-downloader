@@ -40,8 +40,6 @@ app.use(
         saveUninitialized: false,
         cookie: {
             maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-            secure: true, // Required for sameSite: 'none'
-            sameSite: 'none', // Allow cross-domain cookies
             httpOnly: true
         }
     })
