@@ -125,7 +125,10 @@ function App() {
         setUser(res.data.user);
       } catch (err) {
         console.error('Login failed:', err);
-        alert('Login failed. Please try again.');
+
+        // Show specific error message from backend
+        const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
+        alert(errorMessage);
       }
     },
     onError: (error) => {
