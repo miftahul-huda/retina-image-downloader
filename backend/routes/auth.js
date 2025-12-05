@@ -34,24 +34,36 @@ router.post('/google', async (req, res) => {
         const payload = ticket.getPayload();
         const { sub: googleId, email, name, picture } = payload;
 
-        // Find or create user
+        // Find user by googleId first, then by email (for pre-registered users)
         let user = await GoogleUser.findOne({ where: { googleId } });
-        const isAdminEmail = email === 'miftahul.huda@devoteam.com';
 
         if (!user) {
-            // Create new user (not authorized by default, except admin)
-            user = await GoogleUser.create({
-                googleId,
-                email,
-                name: name,
-                photo: picture,
-                accessToken: tokens.access_token,
-                refreshToken: tokens.refresh_token,
-                isAuthorized: isAdminEmail, // Auto-authorize admin
-                isAdmin: isAdminEmail // Auto-set admin
+            // Check if user was pre-registered by email
+            user = await GoogleUser.findOne({ where: { email } });
+
+            if (user && user.googleId.startsWith('pending_')) {
+                // Update pending user with actual googleId
+                await user.update({
+                    googleId,
+                    name: name,
+                    photo: picture,
+                    accessToken: tokens.access_token,
+                    refreshToken: tokens.refresh_token
+                });
+            }
+        }
+
+        // If user still doesn't exist, return error (no auto-registration)
+        if (!user) {
+            return res.status(403).json({
+                error: 'User not registered',
+                message: 'Your email is not registered in the system. Please contact the administrator to register your account.',
+                email: email
             });
-        } else {
-            // Update existing user's tokens
+        }
+
+        // Update user's tokens and info (for existing users)
+        if (!user.googleId.startsWith('pending_')) {
             await user.update({
                 email,
                 name: name,
@@ -61,7 +73,7 @@ router.post('/google', async (req, res) => {
             });
         }
 
-        // Check if user is authorized (applies to both new and existing users)
+        // Check if user is authorized
         if (!user.isAuthorized) {
             return res.status(403).json({
                 error: 'User not authorized',
