@@ -20,7 +20,12 @@ module.exports = (sequelize, DataTypes) => {
     name: DataTypes.STRING,
     photo: DataTypes.STRING,
     accessToken: DataTypes.TEXT,
-    refreshToken: DataTypes.TEXT
+    refreshToken: DataTypes.TEXT,
+    isAuthorized: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false
+    }
   }, {
     sequelize,
     modelName: 'GoogleUser',

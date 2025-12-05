@@ -38,24 +38,42 @@ router.post('/google', async (req, res) => {
         let user = await GoogleUser.findOne({ where: { googleId } });
 
         if (!user) {
+            // Create new user (not authorized by default)
             user = await GoogleUser.create({
                 googleId,
                 email,
                 name: name,
                 photo: picture,
                 accessToken: tokens.access_token,
-                refreshToken: tokens.refresh_token
+                refreshToken: tokens.refresh_token,
+                isAuthorized: false // New users not authorized by default
             });
-        } else {
-            // Update user info and tokens
-            await user.update({
-                email,
-                name: name,
-                photo: picture,
-                accessToken: tokens.access_token,
-                refreshToken: tokens.refresh_token || user.refreshToken // Keep old refresh token if new one not provided
+
+            // Return error for unauthorized user
+            return res.status(403).json({
+                error: 'User not authorized',
+                message: 'Your account is not authorized to access this application. Please contact the administrator.',
+                email: email
             });
         }
+
+        // Check if existing user is authorized
+        if (!user.isAuthorized) {
+            return res.status(403).json({
+                error: 'User not authorized',
+                message: 'Your account is not authorized to access this application. Please contact the administrator.',
+                email: email
+            });
+        }
+
+        // Update user info and tokens for authorized users
+        await user.update({
+            email,
+            name: name,
+            photo: picture,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token || user.refreshToken // Keep old refresh token if new one not provided
+        });
 
         // Generate JWT token
         const jwtToken = jwt.sign(

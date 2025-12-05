@@ -3,6 +3,7 @@ const cors = require('cors');
 const db = require('./models');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -31,6 +32,7 @@ app.use(express.json());
 
 app.use('/api', apiRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Serve static files from the frontend build directory (only for unified deployment)
 // Commented out for separate services deployment
