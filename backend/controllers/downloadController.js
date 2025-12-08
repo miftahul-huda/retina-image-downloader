@@ -27,14 +27,37 @@ const transporter = nodemailer.createTransport({
  * @returns {Promise<{fileId: string, webViewLink: string}>}
  */
 async function uploadToDrive(filePath, fileName, user) {
+    console.log(`Attempting to upload ${fileName} to Google Drive for user ${user.email}`);
+
     const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET
     );
 
+    console.log('Setting OAuth credentials...');
     oauth2Client.setCredentials({
         access_token: user.accessToken,
         refresh_token: user.refreshToken
+    });
+
+    // Auto-refresh token if expired
+    oauth2Client.on('tokens', async (tokens) => {
+        console.log('Tokens event triggered - refreshing tokens');
+        if (tokens.refresh_token) {
+            console.log('Updating refresh token in database');
+            await GoogleUser.update(
+                { refreshToken: tokens.refresh_token },
+                { where: { id: user.id } }
+            );
+        }
+        if (tokens.access_token) {
+            console.log('Updating access token in database');
+            await GoogleUser.update(
+                { accessToken: tokens.access_token },
+                { where: { id: user.id } }
+            );
+            console.log('Access token refreshed successfully');
+        }
     });
 
     const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -50,13 +73,17 @@ async function uploadToDrive(filePath, fileName, user) {
     };
 
     try {
+        console.log('Creating file in Google Drive...');
         const file = await drive.files.create({
             resource: fileMetadata,
             media: media,
             fields: 'id, webViewLink, webContentLink'
         });
 
+        console.log(`File created with ID: ${file.data.id}`);
+
         // Make the file accessible to anyone with the link
+        console.log('Setting file permissions...');
         await drive.permissions.create({
             fileId: file.data.id,
             requestBody: {
@@ -65,13 +92,26 @@ async function uploadToDrive(filePath, fileName, user) {
             }
         });
 
+        console.log('Upload to Google Drive completed successfully');
         return {
             fileId: file.data.id,
             webViewLink: file.data.webViewLink,
             webContentLink: file.data.webContentLink
         };
     } catch (error) {
-        console.error('Error uploading to Google Drive:', error);
+        console.error('Error uploading to Google Drive:', error.message);
+        console.error('Error details:', {
+            code: error.code,
+            status: error.status,
+            message: error.message
+        });
+
+        // If it's an auth error, provide more context
+        if (error.code === 401 || error.status === 401) {
+            console.error('Authentication failed - user may need to re-login');
+            throw new Error('Google Drive authentication failed. Please logout and login again to refresh your credentials.');
+        }
+
         throw error;
     }
 }
@@ -130,7 +170,7 @@ async function processDownload(jobId, query, user) {
 
     try {
         console.log("Fetching files for download job:", jobId);
-        const { startDate, endDate, area, region, city, imageCategory } = query;
+        const { startDate, endDate, area, region, city, imageCategory, sendEmail } = query;
 
         let whereClause = {};
 
@@ -232,7 +272,6 @@ async function processDownload(jobId, query, user) {
         await workbook.xlsx.writeFile(excelPath);
 
         // 2. Download Files in Parallel
-        let downloadedFiles = 0;
         const BATCH_SIZE = 5; // Adjust concurrency here
 
         for (let i = 0; i < files.length; i += BATCH_SIZE) {
@@ -256,13 +295,14 @@ async function processDownload(jobId, query, user) {
                 } catch (err) {
                     console.error(`Error downloading file ${file.uploaded_filename}:`, err.message);
                     // Continue even if one file fails
-                } finally {
-                    downloadedFiles++;
                 }
             }));
 
+            // Calculate downloaded files based on current position in loop
+            const downloadedFiles = Math.min(i + BATCH_SIZE, files.length);
+
             // Update progress after each batch
-            await progress.update({ downloadedFiles });
+            await progress.update({ downloadedFiles: downloadedFiles });
 
             // Check for cancellation
             const currentJob = await DownloadJob.findByPk(jobId);
@@ -330,38 +370,45 @@ async function processDownload(jobId, query, user) {
                 zipFilePath: `drive://${driveResult.fileId}`
             });
 
-            // Send email with Google Drive link
-            await progress.update({ status: 'sending_email' });
-            const mailOptions = {
-                from: process.env.GMAIL_USER,
-                to: user.email,
-                subject: 'Your Retina Image Download is Ready',
-                html: `
-                    <h2>Your Retina Image Download is Complete</h2>
-                    <p>Hello ${user.name},</p>
-                    <p>Your requested image download has been processed successfully.</p>
-                    <p><strong>Download Details:</strong></p>
-                    <ul>
-                        <li>Total files: ${files.length}</li>
-                        <li>ZIP file name: ${zipFileName}</li>
-                    </ul>
-                    <p>The file has been uploaded to your Google Drive and is ready for download.</p>
-                    <p><a href="${driveResult.webViewLink}" style="background-color: #E60000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 16px 0;">Open in Google Drive</a></p>
-                    <p>Or copy this link: <a href="${driveResult.webViewLink}">${driveResult.webViewLink}</a></p>
-                    <p><em>This file will remain in your Google Drive until you delete it.</em></p>
-                    <p>Thank you for using Retina Downloader!</p>
-                `,
-                text: `Your Retina Image Download is Complete\n\nHello ${user.name},\n\nYour requested image download has been processed successfully.\n\nTotal files: ${files.length}\nZIP file name: ${zipFileName}\n\nThe file has been uploaded to your Google Drive: ${driveResult.webViewLink}\n\nThank you for using Retina Downloader!`
-            };
+            if (sendEmail === true) {
+                // Send email with Google Drive link
+                await progress.update({ status: 'sending_email' });
+                const mailOptions = {
+                    from: process.env.GMAIL_USER,
+                    to: user.email,
+                    subject: 'Your Retina Image Download is Ready',
+                    html: `
+                        <h2>Your Retina Image Download is Complete</h2>
+                        <p>Hello ${user.name},</p>
+                        <p>Your requested image download has been processed successfully.</p>
+                        <p><strong>Download Details:</strong></p>
+                        <ul>
+                            <li>Total files: ${files.length}</li>
+                            <li>ZIP file name: ${zipFileName}</li>
+                        </ul>
+                        <p>The file has been uploaded to your Google Drive and is ready for download.</p>
+                        <p><a href="${driveResult.webViewLink}" style="background-color: #E60000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 16px 0;">Open in Google Drive</a></p>
+                        <p>Or copy this link: <a href="${driveResult.webViewLink}">${driveResult.webViewLink}</a></p>
+                        <p><em>This file will remain in your Google Drive until you delete it.</em></p>
+                        <p>Thank you for using Retina Downloader!</p>
+                    `,
+                    text: `Your Retina Image Download is Complete\n\nHello ${user.name},\n\nYour requested image download has been processed successfully.\n\nTotal files: ${files.length}\nZIP file name: ${zipFileName}\n\nThe file has been uploaded to your Google Drive: ${driveResult.webViewLink}\n\nThank you for using Retina Downloader!`
+                };
 
-            transporter.sendMail(mailOptions, async (error, info) => {
-                if (error) {
-                    console.error('Error sending email:', error);
-                } else {
-                    console.log('Email sent: ' + info.response);
-                    await progress.update({ status: 'email_sent' });
-                }
-            });
+                transporter.sendMail(mailOptions, async (error, info) => {
+                    if (error) {
+                        console.error('Error sending email:', error);
+                    } else {
+                        console.log('Email sent: ' + info.response);
+                        await progress.update({ status: 'email_sent' });
+                        await progress.update({ status: 'completed' });
+                    }
+                });
+            }
+            else {
+                console.log('Skipping email notification (user declined)');
+                await progress.update({ status: 'completed' });
+            }
         } catch (error) {
             console.error('Error in post-processing:', error);
             await job.update({ status: 'failed', error: error.message });

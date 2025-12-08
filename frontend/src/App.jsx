@@ -35,6 +35,9 @@ function MainApp() {
   const [isClosingExistingModal, setIsClosingExistingModal] = useState(false);
   const [activeTab, setActiveTab] = useState('downloads'); // 'downloads' or 'admin'
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+  const [downloadCompleteModal, setDownloadCompleteModal] = useState({ isOpen: false, fileUrl: '' });
+  const [emailConfirmModal, setEmailConfirmModal] = useState({ isOpen: false });
+  const [cancelConfirmModal, setCancelConfirmModal] = useState({ isOpen: false });
 
   const uniqueAreas = [...new Set(masterData.map(d => d.area))].filter(Boolean);
   const uniqueRegions = [...new Set(masterData.filter(d => !filters.area || d.area === filters.area).map(d => d.region))].filter(Boolean);
@@ -196,7 +199,17 @@ function MainApp() {
     fetchUploads(1);
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
+    // If already downloading, show cancel confirmation
+    if (downloading) {
+      setCancelConfirmModal({ isOpen: true });
+      return;
+    }
+    // Show email confirmation modal
+    setEmailConfirmModal({ isOpen: true });
+  };
+
+  const proceedWithDownload = async (sendEmail) => {
     setDownloading(true);
     setDownloadProgress(null);
     try {
@@ -206,7 +219,8 @@ function MainApp() {
         area: filters.area,
         region: filters.region,
         city: filters.city,
-        imageCategory: filters.imageCategory
+        imageCategory: filters.imageCategory,
+        sendEmail: sendEmail
       };
 
       console.log("Starting download with params:", params);
@@ -275,14 +289,20 @@ function MainApp() {
       const res = await api.get(`/download/status/${downloadJobId}`);
       setDownloadProgress(res.data);
 
-      // Reset UI when email is sent or job completed/failed
-      if (res.data.status === 'email_sent' || res.data.status === 'completed' || res.data.status === 'failed' || res.data.status === 'cancelled') {
-        // Add a small delay so user can see the final status briefly if needed,
-        // but user asked to hide it. I'll hide it immediately as requested or maybe after 2 seconds?
-        // "kembalikan button ke Download All, dan sembunyikan status"
-        // I'll do it immediately to strictly follow "ketika status email sent".
-
-        // Wait 3 seconds to let user see "Email Sent" then reset
+      // Show modal when download is completed successfully
+      console.log("Download status:", res.data);
+      if (res.data.status === 'completed' && res.data.zipUrl) {
+        setDownloadCompleteModal({ isOpen: true, fileUrl: res.data.zipUrl });
+        // Reset UI after showing modal
+        setTimeout(() => {
+          setDownloading(false);
+          setDownloadJobId(null);
+          setDownloadProgress(null);
+        }, 1000);
+      }
+      // Reset UI when email is sent or job failed/cancelled
+      else if (res.data.status === 'email_sent' || res.data.status === 'failed' || res.data.status === 'cancelled') {
+        // Wait 3 seconds to let user see the final status then reset
         setTimeout(() => {
           setDownloading(false);
           setDownloadJobId(null);
@@ -467,7 +487,7 @@ function MainApp() {
                   disabled={loading}
                 >
                   {downloading ? <div className="loading-spinner" style={{ width: 16, height: 16, borderTopColor: 'white' }}></div> : <FaCloudDownloadAlt />}
-                  {downloading ? ' Downloading & Zipping...' : ' Download All'}
+                  {downloading ? ' Click to Cancel' : ' Download All'}
                 </button>
               </div>
             </div>
@@ -483,6 +503,16 @@ function MainApp() {
                 )}
                 {downloadProgress.status !== 'queued' && (
                   <>
+                    {/* Show running animation during active processing */}
+                    {(downloadProgress.status === 'processing' || downloadProgress.status === 'zipping') && (
+                      <div className="running-animation">
+                        <div className="running-person">🏃</div>
+                        <div className="running-person">🏃</div>
+                        <div className="running-person">🏃</div>
+                        <div className="running-track"></div>
+                      </div>
+                    )}
+
                     <p>Status: <strong>{downloadProgress.status.replace(/_/g, ' ').toUpperCase()}</strong></p>
                     {downloadProgress.status === 'starting' && (
                       <p>Starting download job... Please wait.</p>
@@ -529,6 +559,7 @@ function MainApp() {
             ) : (
               <div className="grid-container">
                 {uploads.map(upload => (
+                  console.log(upload.thumbnailUrl),
                   <div key={upload.id} className="card" onClick={() => setSelectedImage(upload)}>
                     <img src={upload.thumbnailUrl} alt={upload.OUTLET_NAME} className="card-image" loading="lazy" />
                     <div className="card-body">
@@ -619,6 +650,68 @@ function MainApp() {
         message={modal.message}
         type={modal.type}
       />
+
+      {/* Email Confirmation Modal */}
+      <Modal
+        isOpen={emailConfirmModal.isOpen}
+        onClose={() => setEmailConfirmModal({ isOpen: false })}
+        title="Send Email Notification?"
+        message="Would you like to receive an email with the download link when the file is ready?"
+        type="confirm"
+        onConfirm={() => proceedWithDownload(true)}
+        onCancel={() => proceedWithDownload(false)}
+        confirmText="Yes, send email"
+        cancelText="No, skip email"
+      />
+
+      {/* Cancel Confirmation Modal */}
+      <Modal
+        isOpen={cancelConfirmModal.isOpen}
+        onClose={() => setCancelConfirmModal({ isOpen: false })}
+        title="Cancel Download?"
+        message="Are you sure you want to cancel this download? All progress will be lost."
+        type="confirm"
+        onConfirm={() => {
+          handleCancelDownload();
+          setCancelConfirmModal({ isOpen: false });
+        }}
+        onCancel={() => setCancelConfirmModal({ isOpen: false })}
+        confirmText="Yes, cancel download"
+        cancelText="No, continue"
+      />
+
+      {/* Download Complete Modal */}
+      {downloadCompleteModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setDownloadCompleteModal({ isOpen: false, fileUrl: '' })}>
+          <div className="modal-content modal-alert" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <button className="modal-close" onClick={() => setDownloadCompleteModal({ isOpen: false, fileUrl: '' })}>
+              <FaTimes />
+            </button>
+            <div className="modal-icon" style={{ color: '#27ae60', fontSize: '4rem' }}>
+              <FaCloudDownloadAlt />
+            </div>
+            <h2 className="modal-title">Download Complete!</h2>
+            <p className="modal-message">
+              Your files have been successfully downloaded and zipped. Click the link below to download your file:
+            </p>
+            <a
+              href={downloadCompleteModal.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary"
+              style={{
+                marginTop: '1rem',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <FaDownload /> Download ZIP File
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

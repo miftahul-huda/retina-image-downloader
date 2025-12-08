@@ -1,8 +1,10 @@
 import React from 'react';
-import { FaTimes, FaExclamationCircle, FaCheckCircle, FaInfoCircle } from 'react-icons/fa';
+import { FaTimes, FaExclamationCircle, FaCheckCircle, FaInfoCircle, FaQuestionCircle } from 'react-icons/fa';
 
-function Modal({ isOpen, onClose, title, message, type = 'info' }) {
+function Modal({ isOpen, onClose, title, message, type = 'info', onConfirm, onCancel, confirmText = 'Yes', cancelText = 'No' }) {
     if (!isOpen) return null;
+
+    const isConfirmation = type === 'confirm';
 
     const getIcon = () => {
         switch (type) {
@@ -10,6 +12,8 @@ function Modal({ isOpen, onClose, title, message, type = 'info' }) {
                 return <FaExclamationCircle />;
             case 'success':
                 return <FaCheckCircle />;
+            case 'confirm':
+                return <FaQuestionCircle />;
             default:
                 return <FaInfoCircle />;
         }
@@ -21,17 +25,31 @@ function Modal({ isOpen, onClose, title, message, type = 'info' }) {
                 return '#e74c3c';
             case 'success':
                 return '#27ae60';
+            case 'confirm':
+                return '#f39c12';
             default:
                 return '#3498db';
         }
     };
 
+    const handleConfirm = () => {
+        if (onConfirm) onConfirm();
+        if (onClose) onClose();
+    };
+
+    const handleCancel = () => {
+        if (onCancel) onCancel();
+        if (onClose) onClose();
+    };
+
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onClick={isConfirmation ? undefined : onClose}>
             <div className="modal-content modal-alert" onClick={(e) => e.stopPropagation()}>
-                <button className="modal-close" onClick={onClose}>
-                    <FaTimes />
-                </button>
+                {!isConfirmation && (
+                    <button className="modal-close" onClick={onClose}>
+                        <FaTimes />
+                    </button>
+                )}
 
                 <div className="modal-icon" style={{ color: getIconColor() }}>
                     {getIcon()}
@@ -41,9 +59,20 @@ function Modal({ isOpen, onClose, title, message, type = 'info' }) {
 
                 <p className="modal-message">{message}</p>
 
-                <button className="modal-button" onClick={onClose}>
-                    OK
-                </button>
+                {isConfirmation ? (
+                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+                        <button className="btn btn-outline" onClick={handleCancel}>
+                            {cancelText}
+                        </button>
+                        <button className="btn btn-primary" onClick={handleConfirm}>
+                            {confirmText}
+                        </button>
+                    </div>
+                ) : (
+                    <button className="modal-button" onClick={onClose}>
+                        OK
+                    </button>
+                )}
             </div>
         </div>
     );

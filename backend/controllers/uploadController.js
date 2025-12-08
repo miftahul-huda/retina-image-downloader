@@ -40,9 +40,8 @@ exports.getUploads = async (req, res) => {
         const data = rows.map((row) => {
             let url = '';
             if (row.uploaded_filename) {
-                // Use backend proxy endpoint with absolute URL
-                const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-                url = `${baseUrl}/api/image?filename=${encodeURIComponent(row.uploaded_filename)}`;
+                // Use relative path for unified deployment
+                url = `/api/image?filename=${encodeURIComponent(row.uploaded_filename)}`;
             }
 
             return {

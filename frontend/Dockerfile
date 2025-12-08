@@ -24,6 +24,10 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+
+# Set environment variable for port
+ENV PORT=8080
+
 # Expose port 8080
 EXPOSE 8080
 
