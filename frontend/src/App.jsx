@@ -195,6 +195,21 @@ function MainApp() {
   };
 
   const handleDisplay = () => {
+    // Validate date range - should not exceed 1 month (31 days)
+    if (filters.startDate && filters.endDate) {
+      const daysDifference = Math.ceil((filters.endDate - filters.startDate) / (1000 * 60 * 60 * 24));
+
+      if (daysDifference > 31) {
+        setModal({
+          isOpen: true,
+          title: 'Invalid Date Range',
+          message: 'Date range is limited to 1 month maximum. Please select a shorter date range.',
+          type: 'error'
+        });
+        return;
+      }
+    }
+
     setPage(1);
     fetchUploads(1);
   };
@@ -205,6 +220,22 @@ function MainApp() {
       setCancelConfirmModal({ isOpen: true });
       return;
     }
+
+    // Validate date range - should not exceed 1 month (31 days)
+    if (filters.startDate && filters.endDate) {
+      const daysDifference = Math.ceil((filters.endDate - filters.startDate) / (1000 * 60 * 60 * 24));
+
+      if (daysDifference > 31) {
+        setModal({
+          isOpen: true,
+          title: 'Invalid Date Range',
+          message: 'Date range is limited to 1 month maximum. Please select a shorter date range.',
+          type: 'error'
+        });
+        return;
+      }
+    }
+
     // Show email confirmation modal
     setEmailConfirmModal({ isOpen: true });
   };
@@ -408,6 +439,7 @@ function MainApp() {
                     endDate={filters.endDate}
                     className="form-input"
                     placeholderText="Start Date"
+                    dateFormat="dd MMM yyyy"
                   />
                   <DatePicker
                     selected={filters.endDate}
@@ -418,6 +450,7 @@ function MainApp() {
                     minDate={filters.startDate}
                     className="form-input"
                     placeholderText="End Date"
+                    dateFormat="dd MMM yyyy"
                   />
                 </div>
               </div>
