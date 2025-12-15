@@ -369,9 +369,7 @@ async function processDownload(jobId, query, user) {
             console.log(`${localZipPath} uploaded to ${bucketName}/${gcsDest}`);
             */
 
-            // Clean up local files
-            fs.unlinkSync(localZipPath);
-            fs.rmSync(jobDir, { recursive: true, force: true });
+
 
             try {
                 await progress.update({
@@ -431,6 +429,18 @@ async function processDownload(jobId, query, user) {
             await job.update({ status: 'failed', error: error.message });
             if (progress) {
                 await progress.update({ status: 'failed' });
+            }
+        } finally {
+            // Clean up local files
+            try {
+                if (fs.existsSync(localZipPath)) {
+                    fs.unlinkSync(localZipPath);
+                }
+                if (fs.existsSync(jobDir)) {
+                    fs.rmSync(jobDir, { recursive: true, force: true });
+                }
+            } catch (cleanupError) {
+                console.error('Error during cleanup:', cleanupError);
             }
         }
 
