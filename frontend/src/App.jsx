@@ -560,7 +560,7 @@ function MainApp() {
                       <p>Zipping completed. Preparing upload...</p>
                     )}
                     {downloadProgress.status === 'uploading_to_drive' && (
-                      <p>Uploading ZIP to Google Drive...</p>
+                      <p>Uploading to Google Drive... {downloadProgress.uploadPercentage ? `${downloadProgress.uploadPercentage}%` : ''}</p>
                     )}
                     {downloadProgress.status === 'drive_upload_completed' && (
                       <p>Upload to Drive completed. Sending email...</p>
