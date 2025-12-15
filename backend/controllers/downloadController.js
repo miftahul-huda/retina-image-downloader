@@ -284,7 +284,7 @@ async function processDownload(jobId, query, user) {
         console.log("Updating download progress");
         progress = await DownloadProgress.findOne({ where: { jobId: job.id } });
         if (!progress) {
-            // Fallback: create if not exists (shouldn't happen with queue system)
+            // Fallback: create if not exists
             progress = await DownloadProgress.create({
                 jobId: job.id,
                 totalFiles: files.length,
@@ -300,16 +300,36 @@ async function processDownload(jobId, query, user) {
 
         const zipFileName = `retina-images-${Date.now()}.zip`;
         const tempDir = path.join(__dirname, '..', 'temp');
-        const jobDir = path.join(tempDir, `job-${jobId}`);
 
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
         }
-        if (!fs.existsSync(jobDir)) {
-            fs.mkdirSync(jobDir, { recursive: true });
-        }
 
-        // 1. Generate Excel File
+        // Initialize Zip Stream immediately
+        const localZipPath = path.join(tempDir, zipFileName);
+        const output = fs.createWriteStream(localZipPath);
+        const archive = archiver('zip', {
+            zlib: { level: 9 },
+        });
+
+        // Handle archive warnings and errors
+        archive.on('warning', function (err) {
+            if (err.code === 'ENOENT') {
+                console.warn('Archiver warning:', err);
+            } else {
+                console.error('Archiver error:', err);
+            }
+        });
+        archive.on('error', function (err) {
+            console.error('Archiver error:', err);
+            throw err;
+        });
+
+        archive.pipe(output);
+
+        // 1. Generate Excel File (Stream to archive directly or temp file)
+        // Using temp file for Excel as it's easier with exceljs
+        const excelPath = path.join(tempDir, `uploads-${jobId}.xlsx`);
         const workbook = new excel.Workbook();
         const worksheet = workbook.addWorksheet('Uploads');
         worksheet.columns = [
@@ -340,35 +360,72 @@ async function processDownload(jobId, query, user) {
             });
         });
 
-        const excelPath = path.join(jobDir, 'uploads.xlsx');
         await workbook.xlsx.writeFile(excelPath);
+        archive.file(excelPath, { name: 'uploads.xlsx' });
 
-        // 2. Download Files in Parallel
-        const BATCH_SIZE = 100; // Adjust concurrency here
+        // 2. Stream Files directly to Archive
+        const BATCH_SIZE = 10; // Reduced batch size for streaming to check memory
 
         for (let i = 0; i < files.length; i += BATCH_SIZE) {
             const batch = files.slice(i, i + BATCH_SIZE);
+
             await Promise.all(batch.map(async (file) => {
-                try {
-                    const gcsFileName = file.uploaded_filename;
-                    if (gcsFileName) {
-                        const store = file.store;
-                        const folderPath = path.join(jobDir, store.store_area, store.store_region, store.store_city);
+                return new Promise((resolve, reject) => {
+                    try {
+                        const gcsFileName = file.uploaded_filename;
+                        if (gcsFileName) {
+                            const store = file.store;
+                            // Construct internal zip path
+                            const shortFileName = gcsFileName.replace(`gs://${bucketName}/`, '');
+                            const zipEntryPath = path.join(store.store_area, store.store_region, store.store_city, path.basename(shortFileName));
 
-                        if (!fs.existsSync(folderPath)) {
-                            fs.mkdirSync(folderPath, { recursive: true });
+                            const remoteFile = storage.bucket(bucketName).file(shortFileName);
+                            const stream = remoteFile.createReadStream();
+
+                            stream.on('error', (err) => {
+                                console.error(`Error downloading file ${file.uploaded_filename}:`, err.message);
+                                // Resolve anyway to continue with other files
+                                resolve();
+                            });
+
+                            // We don't strictly need to wait for 'end' if archiver handles it, 
+                            // but waiting ensures we don't open too many streams at once (backpressure)
+                            stream.on('end', () => {
+                                resolve();
+                            });
+
+                            archive.append(stream, { name: zipEntryPath });
+                        } else {
+                            resolve();
                         }
-
-                        const shortFileName = gcsFileName.replace(`gs://${bucketName}/`, '');
-                        const localFilePath = path.join(folderPath, path.basename(shortFileName));
-
-                        await storage.bucket(bucketName).file(shortFileName).download({ destination: localFilePath });
+                    } catch (err) {
+                        console.error(`Error processing file ${file.uploaded_filename}:`, err.message);
+                        resolve();
                     }
-                } catch (err) {
-                    console.error(`Error downloading file ${file.uploaded_filename}:`, err.message);
-                    // Continue even if one file fails
-                }
+                });
             }));
+
+            // Check for cancellation
+            try {
+                const currentJob = await DownloadJob.findByPk(jobId);
+                if (currentJob && currentJob.status === 'cancelled') {
+                    console.log(`Job ${jobId} was cancelled. Stopping process.`);
+                    archive.abort(); // Abort the archive
+                    output.destroy(); // Close headers
+                    // Cleanup temp excel
+                    if (fs.existsSync(excelPath)) fs.unlinkSync(excelPath);
+                    if (fs.existsSync(localZipPath)) fs.unlinkSync(localZipPath);
+
+                    try {
+                        await progress.update({ status: 'cancelled' });
+                    } catch (err) {
+                        console.error('Error updating status to cancelled:', err.message);
+                    }
+                    return;
+                }
+            } catch (err) {
+                console.error('Error checking job status, continuing:', err.message);
+            }
 
             // Calculate downloaded files based on current position in loop
             const downloadedFiles = Math.min(i + BATCH_SIZE, files.length);
@@ -380,41 +437,15 @@ async function processDownload(jobId, query, user) {
             } catch (err) {
                 console.error('Error updating progress, continuing:', err.message);
             }
-
-            // Check for cancellation
-            try {
-                const currentJob = await DownloadJob.findByPk(jobId);
-                if (currentJob && currentJob.status === 'cancelled') {
-                    console.log(`Job ${jobId} was cancelled. Stopping process.`);
-                    // Cleanup
-                    if (fs.existsSync(jobDir)) {
-                        fs.rmSync(jobDir, { recursive: true, force: true });
-                    }
-                    try {
-                        await progress.update({ status: 'cancelled' });
-                    } catch (err) {
-                        console.error('Error updating status to cancelled:', err.message);
-                    }
-                    return;
-                }
-            } catch (err) {
-                console.error('Error checking job status, continuing:', err.message);
-            }
         }
 
-        // 3. Zip the directory
+        // Finalize the zip
+        console.log("Finalizing zip archive...");
         try { await progress.update({ status: 'zipping' }); } catch (e) { console.error('Status update failed:', e.message); }
-        const localZipPath = path.join(tempDir, zipFileName);
-        const output = fs.createWriteStream(localZipPath);
-        const archive = archiver('zip', {
-            zlib: { level: 9 },
-        });
 
-        archive.pipe(output);
-        archive.directory(jobDir, false); // Zip the contents of jobDir
         await archive.finalize();
 
-        // Wait for zip to finish writing
+        // Wait for zip to finish writing to disk
         await new Promise((resolve, reject) => {
             output.on('close', resolve);
             output.on('error', reject);
@@ -422,6 +453,12 @@ async function processDownload(jobId, query, user) {
 
         console.log(archive.pointer() + ' total bytes');
         console.log('archiver has been finalized and the output file descriptor has closed.');
+
+        // Cleanup temp excel file
+        if (fs.existsSync(excelPath)) {
+            fs.unlinkSync(excelPath);
+        }
+
         try { await progress.update({ status: 'zipping_completed' }); } catch (e) { console.error('Status update failed:', e.message); }
 
         // 4. Upload Zip and Cleanup
@@ -431,16 +468,10 @@ async function processDownload(jobId, query, user) {
             try { await progress.update({ status: 'uploading_to_drive' }); } catch (e) { console.error('Status update failed:', e.message); }
             const driveResult = await uploadToDrive(localZipPath, zipFileName, user, async (percentage) => {
                 // Rate limit updates: only update if percentage changed significantly (e.g. every 5%) or is 100%
-                // But for simplicity and smoother UI, maybe every 2-3 seconds or just every update if not too frequent.
-                // Let's retry simple throttle: only update if changed by at least 5% or is 100%
-
-                // Note: 'progress' variable is available from outer scope
                 if (progress) {
                     try {
                         const currentVal = progress.uploadPercentage || 0;
                         if (percentage >= currentVal + 5 || percentage === 100) {
-                            // Use a non-awaiting update or a separate try-catch to not block upload
-                            // failing to update progress shouldn't fail the upload
                             progress.update({ uploadPercentage: percentage }).catch(err => {
                                 console.error('Error updating upload percentage:', err.message);
                             });
