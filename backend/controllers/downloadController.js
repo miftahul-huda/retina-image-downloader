@@ -26,7 +26,7 @@ const transporter = nodemailer.createTransport({
  * @param {object} user - User object with OAuth tokens
  * @returns {Promise<{fileId: string, webViewLink: string}>}
  */
-async function uploadToDrive(filePath, fileName, user) {
+async function uploadToDrive(filePath, fileName, user, onProgress) {
     console.log(`Attempting to upload ${fileName} to Google Drive for user ${user.email}`);
 
     const oauth2Client = new google.auth.OAuth2(
@@ -74,10 +74,20 @@ async function uploadToDrive(filePath, fileName, user) {
 
     try {
         console.log('Creating file in Google Drive...');
+        console.log('Creating file in Google Drive...');
         const file = await drive.files.create({
             resource: fileMetadata,
             media: media,
             fields: 'id, webViewLink, webContentLink'
+        }, {
+            // Setup progress listener
+            onUploadProgress: evt => {
+                const progress = (evt.bytesRead / fs.statSync(filePath).size) * 100;
+                // console.log(`Upload progress: ${Math.round(progress)}%`);
+                if (onProgress) {
+                    onProgress(Math.round(progress));
+                }
+            }
         });
 
         console.log(`File created with ID: ${file.data.id}`);
@@ -136,6 +146,13 @@ async function uploadToDrive(filePath, fileName, user) {
                             resource: fileMetadata,
                             media: newMedia,
                             fields: 'id, webViewLink, webContentLink'
+                        }, {
+                            onUploadProgress: evt => {
+                                const progress = (evt.bytesRead / fs.statSync(filePath).size) * 100;
+                                if (onProgress) {
+                                    onProgress(Math.round(progress));
+                                }
+                            }
                         });
 
                         console.log(`Retry successful. File created with ID: ${retryFile.data.id}`);
@@ -412,7 +429,27 @@ async function processDownload(jobId, query, user) {
             // Upload to Google Drive
             console.log('Uploading to Google Drive...');
             try { await progress.update({ status: 'uploading_to_drive' }); } catch (e) { console.error('Status update failed:', e.message); }
-            const driveResult = await uploadToDrive(localZipPath, zipFileName, user);
+            const driveResult = await uploadToDrive(localZipPath, zipFileName, user, async (percentage) => {
+                // Rate limit updates: only update if percentage changed significantly (e.g. every 5%) or is 100%
+                // But for simplicity and smoother UI, maybe every 2-3 seconds or just every update if not too frequent.
+                // Let's retry simple throttle: only update if changed by at least 5% or is 100%
+
+                // Note: 'progress' variable is available from outer scope
+                if (progress) {
+                    try {
+                        const currentVal = progress.uploadPercentage || 0;
+                        if (percentage >= currentVal + 5 || percentage === 100) {
+                            // Use a non-awaiting update or a separate try-catch to not block upload
+                            // failing to update progress shouldn't fail the upload
+                            progress.update({ uploadPercentage: percentage }).catch(err => {
+                                console.error('Error updating upload percentage:', err.message);
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Error in progress callback:', e.message);
+                    }
+                }
+            });
             console.log(`Uploaded to Google Drive with file ID: ${driveResult.fileId}`);
             try { await progress.update({ status: 'drive_upload_completed' }); } catch (e) { console.error('Status update failed:', e.message); }
 
