@@ -272,7 +272,7 @@ async function processDownload(jobId, query, user) {
         await workbook.xlsx.writeFile(excelPath);
 
         // 2. Download Files in Parallel
-        const BATCH_SIZE = 5; // Adjust concurrency here
+        const BATCH_SIZE = 100; // Adjust concurrency here
 
         for (let i = 0; i < files.length; i += BATCH_SIZE) {
             const batch = files.slice(i, i + BATCH_SIZE);
@@ -302,6 +302,7 @@ async function processDownload(jobId, query, user) {
             const downloadedFiles = Math.min(i + BATCH_SIZE, files.length);
 
             // Update progress after each batch
+            console.log(`Updated progress: ${downloadedFiles} of ${files.length}`);
             await progress.update({ downloadedFiles: downloadedFiles });
 
             // Check for cancellation
