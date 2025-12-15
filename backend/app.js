@@ -22,6 +22,12 @@ app.use('/api', apiRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Swagger Documentation
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+
 // Serve static files from the frontend build directory (for unified deployment)
 const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
