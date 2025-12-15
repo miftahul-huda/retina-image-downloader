@@ -302,24 +302,36 @@ async function processDownload(jobId, query, user) {
             const downloadedFiles = Math.min(i + BATCH_SIZE, files.length);
 
             // Update progress after each batch
-            console.log(`Updated progress: ${downloadedFiles} of ${files.length}`);
-            await progress.update({ downloadedFiles: downloadedFiles });
+            try {
+                console.log(`Updated progress: ${downloadedFiles} of ${files.length}`);
+                await progress.update({ downloadedFiles: downloadedFiles });
+            } catch (err) {
+                console.error('Error updating progress, continuing:', err.message);
+            }
 
             // Check for cancellation
-            const currentJob = await DownloadJob.findByPk(jobId);
-            if (currentJob.status === 'cancelled') {
-                console.log(`Job ${jobId} was cancelled. Stopping process.`);
-                // Cleanup
-                if (fs.existsSync(jobDir)) {
-                    fs.rmSync(jobDir, { recursive: true, force: true });
+            try {
+                const currentJob = await DownloadJob.findByPk(jobId);
+                if (currentJob && currentJob.status === 'cancelled') {
+                    console.log(`Job ${jobId} was cancelled. Stopping process.`);
+                    // Cleanup
+                    if (fs.existsSync(jobDir)) {
+                        fs.rmSync(jobDir, { recursive: true, force: true });
+                    }
+                    try {
+                        await progress.update({ status: 'cancelled' });
+                    } catch (err) {
+                        console.error('Error updating status to cancelled:', err.message);
+                    }
+                    return;
                 }
-                await progress.update({ status: 'cancelled' });
-                return;
+            } catch (err) {
+                console.error('Error checking job status, continuing:', err.message);
             }
         }
 
         // 3. Zip the directory
-        await progress.update({ status: 'zipping' });
+        try { await progress.update({ status: 'zipping' }); } catch (e) { console.error('Status update failed:', e.message); }
         const localZipPath = path.join(tempDir, zipFileName);
         const output = fs.createWriteStream(localZipPath);
         const archive = archiver('zip', {
@@ -338,16 +350,16 @@ async function processDownload(jobId, query, user) {
 
         console.log(archive.pointer() + ' total bytes');
         console.log('archiver has been finalized and the output file descriptor has closed.');
-        await progress.update({ status: 'zipping_completed' });
+        try { await progress.update({ status: 'zipping_completed' }); } catch (e) { console.error('Status update failed:', e.message); }
 
         // 4. Upload Zip and Cleanup
         try {
             // Upload to Google Drive
             console.log('Uploading to Google Drive...');
-            await progress.update({ status: 'uploading_to_drive' });
+            try { await progress.update({ status: 'uploading_to_drive' }); } catch (e) { console.error('Status update failed:', e.message); }
             const driveResult = await uploadToDrive(localZipPath, zipFileName, user);
             console.log(`Uploaded to Google Drive with file ID: ${driveResult.fileId}`);
-            await progress.update({ status: 'drive_upload_completed' });
+            try { await progress.update({ status: 'drive_upload_completed' }); } catch (e) { console.error('Status update failed:', e.message); }
 
             // Also upload to GCS for backup
             /*const gcsDest = `retina-image-downloads/${zipFileName}`;
@@ -361,11 +373,15 @@ async function processDownload(jobId, query, user) {
             fs.unlinkSync(localZipPath);
             fs.rmSync(jobDir, { recursive: true, force: true });
 
-            await progress.update({
-                status: 'completed',
-                zipUrl: driveResult.webContentLink,
-                downloadedFiles: files.length
-            });
+            try {
+                await progress.update({
+                    status: 'completed',
+                    zipUrl: driveResult.webContentLink,
+                    downloadedFiles: files.length
+                });
+            } catch (e) {
+                console.error('Status update failed:', e.message);
+            }
             await job.update({
                 status: 'completed',
                 zipFilePath: `drive://${driveResult.fileId}`
