@@ -592,9 +592,8 @@ function MainApp() {
             ) : (
               <div className="grid-container">
                 {uploads.map(upload => (
-                  console.log(upload.thumbnailUrl),
                   <div key={upload.id} className="card" onClick={() => setSelectedImage(upload)}>
-                    <img src={upload.thumbnailUrl} alt={upload.OUTLET_NAME} className="card-image" loading="lazy" />
+                    <img src={import.meta.env.VITE_API_URL + upload.thumbnailUrl} alt={upload.OUTLET_NAME} className="card-image" loading="lazy" />
                     <div className="card-body">
                       <div className="card-title"><FaBuilding style={{ marginRight: '0.5rem', color: 'var(--primary-red)' }} /> {upload.OUTLET_NAME}</div>
                       <div className="card-meta"><FaCalendarAlt style={{ marginRight: '0.5rem' }} /> {format(new Date(upload.createdAt), 'dd MMM yyyy HH:mm')}</div>

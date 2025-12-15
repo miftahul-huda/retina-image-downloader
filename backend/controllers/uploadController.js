@@ -41,7 +41,7 @@ exports.getUploads = async (req, res) => {
             let url = '';
             if (row.uploaded_filename) {
                 // Use relative path for unified deployment
-                url = `/api/image?filename=${encodeURIComponent(row.uploaded_filename)}`;
+                url = `/image?filename=${encodeURIComponent(row.uploaded_filename)}`;
             }
 
             return {

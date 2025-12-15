@@ -100,18 +100,73 @@ async function uploadToDrive(filePath, fileName, user) {
         };
     } catch (error) {
         console.error('Error uploading to Google Drive:', error.message);
-        console.error('Error details:', {
-            code: error.code,
-            status: error.status,
-            message: error.message
-        });
 
-        // If it's an auth error, provide more context
+        // Handle 401 errors with token refresh attempt
         if (error.code === 401 || error.status === 401) {
-            console.error('Authentication failed - user may need to re-login');
-            throw new Error('Google Drive authentication failed. Please logout and login again to refresh your credentials.');
+            console.log('Authentication failed (401). Attempting to refresh token manually...');
+
+            try {
+                // If we have a refresh token, try to refresh explicitly
+                if (user.refreshToken) {
+                    const { credentials } = await oauth2Client.refreshAccessToken();
+                    console.log('Token refreshed successfully during retry logic');
+
+                    // Update credentials in database
+                    if (credentials.access_token) {
+                        await GoogleUser.update(
+                            {
+                                accessToken: credentials.access_token,
+                                refreshToken: credentials.refresh_token || user.refreshToken // Keep old refresh token if new one not provided
+                            },
+                            { where: { id: user.id } }
+                        );
+
+                        // Update the client credentials
+                        oauth2Client.setCredentials(credentials);
+
+                        // Retry the upload once
+                        console.log('Retrying upload with new credentials...');
+                        // Create new read stream for retry since previous one might be consumed
+                        const newMedia = {
+                            mimeType: 'application/zip',
+                            body: fs.createReadStream(filePath)
+                        };
+
+                        const retryFile = await drive.files.create({
+                            resource: fileMetadata,
+                            media: newMedia,
+                            fields: 'id, webViewLink, webContentLink'
+                        });
+
+                        console.log(`Retry successful. File created with ID: ${retryFile.data.id}`);
+
+                        // Permission setting for retried file
+                        await drive.permissions.create({
+                            fileId: retryFile.data.id,
+                            requestBody: {
+                                role: 'reader',
+                                type: 'anyone'
+                            }
+                        });
+
+                        return {
+                            fileId: retryFile.data.id,
+                            webViewLink: retryFile.data.webViewLink,
+                            webContentLink: retryFile.data.webContentLink
+                        };
+                    }
+                } else {
+                    console.error('No refresh token available for retry.');
+                }
+            } catch (refreshError) {
+                console.error('Failed to refresh token and retry upload:', refreshError.message);
+                // Fall through to throw original error or new error
+                throw new Error('Google Drive authentication failed even after retry. Please logout and login again.');
+            }
         }
 
+        // Rethrow if not 401 or if retry failed/didn't happen
+        console.error('Upload failed with error:', error);
         throw error;
     }
 }
